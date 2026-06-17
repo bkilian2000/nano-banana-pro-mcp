@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import { writeFile, mkdir } from "fs/promises";
 import { dirname, resolve } from "path";
+import { pathToFileURL } from "url";
 import { GeminiImageClient } from "./gemini.js";
 
 async function saveImageToFile(
@@ -382,9 +383,15 @@ async function main() {
   console.error("Nano Banana Pro MCP server started");
 }
 
-// Only run main when executed directly (not when imported for testing)
+// Only run main when executed directly (not when imported for testing).
+// `pathToFileURL` is required for a correct comparison on Windows, where
+// `import.meta.url` is `file:///C:/...` but `process.argv[1]` is `C:\...`;
+// a naive `file://` + argv concatenation never matches. The `endsWith`
+// fallback is still needed for npx on macOS/Linux, where argv[1] is the
+// `node_modules/.bin` symlink rather than the resolved dist path.
 const isMainModule =
-  import.meta.url === `file://${process.argv[1]}` ||
+  (process.argv[1] != null &&
+    import.meta.url === pathToFileURL(process.argv[1]).href) ||
   process.argv[1]?.endsWith("nano-banana-pro-mcp");
 
 if (isMainModule) {

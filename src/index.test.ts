@@ -10,6 +10,7 @@ vi.mock("fs/promises", () => ({
 }));
 
 import { writeFile, mkdir } from "fs/promises";
+import { resolve, dirname } from "path";
 
 // Valid base64 string for testing (1x1 transparent PNG)
 const VALID_BASE64_PNG =
@@ -267,19 +268,22 @@ describe("MCP Server", () => {
         json: () => Promise.resolve(mockResponse),
       } as Response);
 
+      const outputPath = "/tmp/test-output/image.png";
+      const absolutePath = resolve(outputPath);
+
       const { client } = await createTestClient();
       const result = await client.callTool({
         name: "generate_image",
         arguments: {
           prompt: "a test image",
-          outputPath: "/tmp/test-output/image.png",
+          outputPath,
         },
       });
 
       expect(result.isError).toBeFalsy();
-      expect(vi.mocked(mkdir)).toHaveBeenCalledWith("/tmp/test-output", { recursive: true });
+      expect(vi.mocked(mkdir)).toHaveBeenCalledWith(dirname(absolutePath), { recursive: true });
       expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
-        "/tmp/test-output/image.png",
+        absolutePath,
         expect.any(Buffer)
       );
       // Should include both image and save confirmation
@@ -291,7 +295,7 @@ describe("MCP Server", () => {
       });
       expect(result.content[1]).toEqual({
         type: "text",
-        text: "Image saved to: /tmp/test-output/image.png",
+        text: `Image saved to: ${absolutePath}`,
       });
     });
 
@@ -530,26 +534,29 @@ describe("MCP Server", () => {
         json: () => Promise.resolve(mockResponse),
       } as Response);
 
+      const outputPath = "/tmp/edited-image.png";
+      const absolutePath = resolve(outputPath);
+
       const { client } = await createTestClient();
       const result = await client.callTool({
         name: "edit_image",
         arguments: {
           prompt: "Add a hat",
           images: [{ data: VALID_BASE64_PNG, mimeType: "image/png" }],
-          outputPath: "/tmp/edited-image.png",
+          outputPath,
         },
       });
 
       expect(result.isError).toBeFalsy();
-      expect(vi.mocked(mkdir)).toHaveBeenCalledWith("/tmp", { recursive: true });
+      expect(vi.mocked(mkdir)).toHaveBeenCalledWith(dirname(absolutePath), { recursive: true });
       expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
-        "/tmp/edited-image.png",
+        absolutePath,
         expect.any(Buffer)
       );
       expect(result.content).toHaveLength(2);
       expect(result.content[1]).toEqual({
         type: "text",
-        text: "Image saved to: /tmp/edited-image.png",
+        text: `Image saved to: ${absolutePath}`,
       });
     });
   });
