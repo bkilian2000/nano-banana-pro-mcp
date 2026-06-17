@@ -24,9 +24,19 @@ And the beautiful result:
 
 ### Claude Code CLI
 
+**macOS / Linux:**
+
 ```bash
-claude mcp add nano-banana-pro --env GEMINI_API_KEY=your_api_key_here -- npx @rafarafarafa/nano-banana-pro-mcp
+claude mcp add nano-banana-pro --env GEMINI_API_KEY=your_api_key_here -- npx -y @rafarafarafa/nano-banana-pro-mcp
 ```
+
+**Windows:**
+
+```bash
+claude mcp add nano-banana-pro --env GEMINI_API_KEY=your_api_key_here -- cmd /c npx -y @rafarafarafa/nano-banana-pro-mcp
+```
+
+On Windows, `npx` must be run through `cmd /c`, otherwise the MCP host fails to spawn it (`npx` resolves to `npx.cmd`, which can't be launched without a shell). The `-y` flag stops npx from prompting "Ok to proceed?" on first run, which would otherwise hang the stdio connection.
 
 Replace `your_api_key_here` with your actual Gemini API key.
 
@@ -37,12 +47,30 @@ Add to your Claude Desktop configuration file:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
+**macOS / Linux:**
+
 ```json
 {
   "mcpServers": {
     "nano-banana-pro": {
       "command": "npx",
-      "args": ["@rafarafarafa/nano-banana-pro-mcp"],
+      "args": ["-y", "@rafarafarafa/nano-banana-pro-mcp"],
+      "env": {
+        "GEMINI_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+**Windows** (npx must be wrapped in `cmd /c`):
+
+```json
+{
+  "mcpServers": {
+    "nano-banana-pro": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@rafarafarafa/nano-banana-pro-mcp"],
       "env": {
         "GEMINI_API_KEY": "your_api_key_here"
       }
@@ -60,7 +88,7 @@ Create or edit `.mcp.json` in your project directory (or `~/.mcp.json` for globa
   "mcpServers": {
     "nano-banana-pro": {
       "command": "npx",
-      "args": ["@rafarafarafa/nano-banana-pro-mcp"],
+      "args": ["-y", "@rafarafarafa/nano-banana-pro-mcp"],
       "env": {
         "GEMINI_API_KEY": "your_api_key_here"
       }
@@ -68,6 +96,8 @@ Create or edit `.mcp.json` in your project directory (or `~/.mcp.json` for globa
   }
 }
 ```
+
+> **Windows:** set `"command": "cmd"` and `"args": ["/c", "npx", "-y", "@rafarafarafa/nano-banana-pro-mcp"]` instead.
 
 ### Gemini CLI
 
@@ -78,7 +108,7 @@ Create or edit `~/.gemini/settings.json`:
   "mcpServers": {
     "nano-banana-pro": {
       "command": "npx",
-      "args": ["@rafarafarafa/nano-banana-pro-mcp"],
+      "args": ["-y", "@rafarafarafa/nano-banana-pro-mcp"],
       "env": {
         "GEMINI_API_KEY": "your_api_key_here"
       }
@@ -86,6 +116,8 @@ Create or edit `~/.gemini/settings.json`:
   }
 }
 ```
+
+> **Windows:** set `"command": "cmd"` and `"args": ["/c", "npx", "-y", "@rafarafarafa/nano-banana-pro-mcp"]` instead.
 
 ---
 
