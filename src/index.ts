@@ -7,31 +7,24 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { writeFile, mkdir } from "fs/promises";
-import { dirname, resolve } from "path";
 import { GeminiImageClient } from "./gemini.js";
+import { saveImageToFile, resolveImageInputs } from "./files.js";
 
-async function saveImageToFile(
-  base64Data: string,
-  outputPath: string
-): Promise<string> {
-  const absolutePath = resolve(outputPath);
-  const dir = dirname(absolutePath);
-
-  // Ensure directory exists
-  await mkdir(dir, { recursive: true });
-
-  // Decode base64 and write to file
-  const buffer = Buffer.from(base64Data, "base64");
-  await writeFile(absolutePath, buffer);
-
-  return absolutePath;
-}
-
-const imageInputSchema = z.object({
-  data: z.string().describe("Base64 encoded image data"),
-  mimeType: z.string().describe("MIME type of the image (e.g., image/png, image/jpeg)"),
-});
+const imageInputSchema = z
+  .object({
+    data: z.string().optional().describe("Base64 encoded image data"),
+    mimeType: z
+      .string()
+      .optional()
+      .describe("MIME type of the image (e.g., image/png, image/jpeg). Inferred from the file extension when `path` is used."),
+    path: z
+      .string()
+      .optional()
+      .describe("Path to an image file on disk. The server reads and base64-encodes it. Alternative to `data`."),
+  })
+  .refine((img) => Boolean(img.path) || Boolean(img.data), {
+    message: "Each image must provide either a file `path` or inline `data`.",
+  });
 
 const generateImageSchema = z.object({
   prompt: z.string().describe("Description of the image to generate"),
@@ -139,14 +132,14 @@ export function createServer(apiKey: string): Server {
               },
               images: {
                 type: "array",
-                description: "Optional reference images to guide generation",
+                description: "Optional reference images to guide generation. Each image is either inline base64 (data + mimeType) or a file path.",
                 items: {
                   type: "object",
                   properties: {
-                    data: { type: "string", description: "Base64 encoded image data" },
-                    mimeType: { type: "string", description: "MIME type (e.g., image/png)" },
+                    data: { type: "string", description: "Base64 encoded image data (alternative to path)" },
+                    mimeType: { type: "string", description: "MIME type (e.g., image/png). Inferred from the file extension when path is used." },
+                    path: { type: "string", description: "Path to an image file on disk; read and base64-encoded by the server (alternative to data)" },
                   },
-                  required: ["data", "mimeType"],
                 },
               },
               outputPath: {
@@ -170,14 +163,14 @@ export function createServer(apiKey: string): Server {
               },
               images: {
                 type: "array",
-                description: "One or more images to edit",
+                description: "One or more images to edit. Each image is either inline base64 (data + mimeType) or a file path.",
                 items: {
                   type: "object",
                   properties: {
-                    data: { type: "string", description: "Base64 encoded image data" },
-                    mimeType: { type: "string", description: "MIME type (e.g., image/png)" },
+                    data: { type: "string", description: "Base64 encoded image data (alternative to path)" },
+                    mimeType: { type: "string", description: "MIME type (e.g., image/png). Inferred from the file extension when path is used." },
+                    path: { type: "string", description: "Path to an image file on disk; read and base64-encoded by the server (alternative to data)" },
                   },
-                  required: ["data", "mimeType"],
                 },
                 minItems: 1,
               },
@@ -204,14 +197,14 @@ export function createServer(apiKey: string): Server {
             properties: {
               images: {
                 type: "array",
-                description: "One or more images to describe/analyze",
+                description: "One or more images to describe/analyze. Each image is either inline base64 (data + mimeType) or a file path.",
                 items: {
                   type: "object",
                   properties: {
-                    data: { type: "string", description: "Base64 encoded image data" },
-                    mimeType: { type: "string", description: "MIME type (e.g., image/png)" },
+                    data: { type: "string", description: "Base64 encoded image data (alternative to path)" },
+                    mimeType: { type: "string", description: "MIME type (e.g., image/png). Inferred from the file extension when path is used." },
+                    path: { type: "string", description: "Path to an image file on disk; read and base64-encoded by the server (alternative to data)" },
                   },
-                  required: ["data", "mimeType"],
                 },
                 minItems: 1,
               },
@@ -237,7 +230,12 @@ export function createServer(apiKey: string): Server {
     if (request.params.name === "generate_image") {
       try {
         const args = generateImageSchema.parse(request.params.arguments);
-        const result = await client.generateImage(args);
+        const result = await client.generateImage({
+          ...args,
+          images: args.images
+            ? await resolveImageInputs(args.images)
+            : undefined,
+        });
 
         // Save to file if outputPath is provided
         let savedPath: string | undefined;
@@ -280,7 +278,7 @@ export function createServer(apiKey: string): Server {
         const args = editImageSchema.parse(request.params.arguments);
         const result = await client.generateImage({
           prompt: args.prompt,
-          images: args.images,
+          images: await resolveImageInputs(args.images),
           model: args.model,
         });
 
@@ -324,7 +322,7 @@ export function createServer(apiKey: string): Server {
       try {
         const args = describeImageSchema.parse(request.params.arguments);
         const description = await client.describeImage({
-          images: args.images,
+          images: await resolveImageInputs(args.images),
           prompt: args.prompt,
           model: args.model,
         });

@@ -34,9 +34,20 @@ export interface GeminiResponse {
   };
 }
 
+// Image input as accepted from a tool call. Provide either inline base64
+// (`data` + `mimeType`) or a `path` to an image file on disk. When `path` is
+// used, the MIME type is inferred from the file extension unless `mimeType`
+// is given explicitly.
 export interface ImageInput {
-  data: string;      // base64 encoded image data
-  mimeType: string;  // e.g., "image/png", "image/jpeg"
+  data?: string;      // base64 encoded image data
+  mimeType?: string;  // e.g., "image/png", "image/jpeg"
+  path?: string;      // path to an image file on disk
+}
+
+// An image input after path resolution: always inline base64 + mimeType.
+export interface ResolvedImageInput {
+  data: string;
+  mimeType: string;
 }
 
 export interface GenerateImageOptions {
@@ -44,7 +55,7 @@ export interface GenerateImageOptions {
   aspectRatio?: GeminiImageConfig["aspectRatio"];
   imageSize?: GeminiImageConfig["imageSize"];
   model?: string;
-  images?: ImageInput[];  // optional reference images
+  images?: ResolvedImageInput[];  // optional reference images
 }
 
 export interface GeneratedImage {
@@ -54,7 +65,7 @@ export interface GeneratedImage {
 }
 
 export interface DescribeImageOptions {
-  images: ImageInput[];
+  images: ResolvedImageInput[];
   prompt?: string;  // optional custom prompt for analysis
   model?: string;
 }

@@ -109,8 +109,9 @@ Generate an image from a text prompt. Optionally provide reference images to gui
   - `gemini-2.0-flash-exp` - Widely available fallback
 - `aspectRatio` (optional): `"1:1"` | `"3:4"` | `"4:3"` | `"9:16"` | `"16:9"`
 - `imageSize` (optional): `"1K"` | `"2K"` | `"4K"` (only for image-specific models)
-- `images` (optional): Array of reference images to guide generation
-  - Each image: `{ data: "base64...", mimeType: "image/png" }`
+- `images` (optional): Array of reference images to guide generation. Each image is either:
+  - Inline base64: `{ data: "base64...", mimeType: "image/png" }`
+  - A file path: `{ path: "./photo.png" }` — the server reads the file and infers the MIME type from the extension (`.png`, `.jpg`/`.jpeg`, `.webp`, `.gif`, `.heic`/`.heif`). Pass `mimeType` to override.
 - `outputPath` (optional): File path to save the generated image (e.g., `/path/to/image.png`)
 
 **Example prompts:**
@@ -128,8 +129,9 @@ Edit one or more images based on instructions.
 
 **Parameters:**
 - `prompt` (required): Instructions for how to edit the image(s)
-- `images` (required): Array of images to edit
-  - Each image: `{ data: "base64...", mimeType: "image/png" }`
+- `images` (required): Array of images to edit. Each image is either:
+  - Inline base64: `{ data: "base64...", mimeType: "image/png" }`
+  - A file path: `{ path: "./photo.png" }` (MIME type inferred from the extension; pass `mimeType` to override)
 - `model` (optional): Gemini model to use (default: `gemini-3-pro-image-preview`)
 - `outputPath` (optional): File path to save the edited image (e.g., `/path/to/image.png`)
 
@@ -147,8 +149,9 @@ Combine these two images into one scene
 Analyze and describe one or more images. Returns text only (no image generation).
 
 **Parameters:**
-- `images` (required): Array of images to analyze
-  - Each image: `{ data: "base64...", mimeType: "image/png" }`
+- `images` (required): Array of images to analyze. Each image is either:
+  - Inline base64: `{ data: "base64...", mimeType: "image/png" }`
+  - A file path: `{ path: "./photo.png" }` (MIME type inferred from the extension; pass `mimeType` to override)
 - `prompt` (optional): Custom analysis prompt (default: general description)
 - `model` (optional): Gemini model to use (default: `gemini-3-pro-image-preview`)
 
