@@ -7,9 +7,11 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 vi.mock("fs/promises", () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),
+  readFile: vi.fn().mockResolvedValue(Buffer.from("fake-image-bytes")),
 }));
 
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, readFile } from "fs/promises";
+import { resolve, dirname } from "path";
 
 // Valid base64 string for testing (1x1 transparent PNG)
 const VALID_BASE64_PNG =
@@ -22,6 +24,8 @@ describe("MCP Server", () => {
     vi.stubGlobal("fetch", vi.fn());
     vi.mocked(writeFile).mockClear();
     vi.mocked(mkdir).mockClear();
+    vi.mocked(readFile).mockClear();
+    vi.mocked(readFile).mockResolvedValue(Buffer.from("fake-image-bytes"));
   });
 
   afterEach(() => {
@@ -267,19 +271,22 @@ describe("MCP Server", () => {
         json: () => Promise.resolve(mockResponse),
       } as Response);
 
+      const outputPath = "/tmp/test-output/image.png";
+      const absolutePath = resolve(outputPath);
+
       const { client } = await createTestClient();
       const result = await client.callTool({
         name: "generate_image",
         arguments: {
           prompt: "a test image",
-          outputPath: "/tmp/test-output/image.png",
+          outputPath,
         },
       });
 
       expect(result.isError).toBeFalsy();
-      expect(vi.mocked(mkdir)).toHaveBeenCalledWith("/tmp/test-output", { recursive: true });
+      expect(vi.mocked(mkdir)).toHaveBeenCalledWith(dirname(absolutePath), { recursive: true });
       expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
-        "/tmp/test-output/image.png",
+        absolutePath,
         expect.any(Buffer)
       );
       // Should include both image and save confirmation
@@ -291,7 +298,7 @@ describe("MCP Server", () => {
       });
       expect(result.content[1]).toEqual({
         type: "text",
-        text: "Image saved to: /tmp/test-output/image.png",
+        text: `Image saved to: ${absolutePath}`,
       });
     });
 
@@ -376,6 +383,95 @@ describe("MCP Server", () => {
       const body = JSON.parse(callArgs[1]?.body as string);
       expect(body.contents[0].parts).toHaveLength(2);
       expect(body.contents[0].parts[1].inlineData).toBeDefined();
+    });
+
+    it("should read a reference image from a file path and infer mimeType", async () => {
+      const mockResponse = {
+        candidates: [
+          { content: { parts: [{ inlineData: { mimeType: "image/png", data: VALID_BASE64_PNG } }] } },
+        ],
+      };
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      } as Response);
+
+      const { client } = await createTestClient();
+      const result = await client.callTool({
+        name: "generate_image",
+        arguments: {
+          prompt: "Generate in this style",
+          images: [{ path: "/some/dir/reference.png" }],
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(vi.mocked(readFile)).toHaveBeenCalledOnce();
+
+      const callArgs = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(callArgs[1]?.body as string);
+      const sent = body.contents[0].parts[1].inlineData;
+      expect(sent.mimeType).toBe("image/png");
+      expect(sent.data).toBe(Buffer.from("fake-image-bytes").toString("base64"));
+    });
+
+    it("should prefer an explicit mimeType over the file extension", async () => {
+      const mockResponse = {
+        candidates: [
+          { content: { parts: [{ inlineData: { mimeType: "image/png", data: VALID_BASE64_PNG } }] } },
+        ],
+      };
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      } as Response);
+
+      const { client } = await createTestClient();
+      await client.callTool({
+        name: "generate_image",
+        arguments: {
+          prompt: "Generate in this style",
+          images: [{ path: "/some/dir/reference.bin", mimeType: "image/jpeg" }],
+        },
+      });
+
+      const callArgs = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(callArgs[1]?.body as string);
+      expect(body.contents[0].parts[1].inlineData.mimeType).toBe("image/jpeg");
+    });
+
+    it("should error on an unknown extension with no mimeType", async () => {
+      const { client } = await createTestClient();
+      const result = await client.callTool({
+        name: "generate_image",
+        arguments: {
+          prompt: "Generate in this style",
+          images: [{ path: "/some/dir/reference.bin" }],
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]).toMatchObject({
+        type: "text",
+        text: expect.stringContaining("Cannot infer MIME type"),
+      });
+    });
+
+    it("should error when an image has neither path nor data", async () => {
+      const { client } = await createTestClient();
+      const result = await client.callTool({
+        name: "generate_image",
+        arguments: {
+          prompt: "Generate in this style",
+          images: [{ mimeType: "image/png" }],
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]).toMatchObject({
+        type: "text",
+        text: expect.stringContaining("Failed to generate image"),
+      });
     });
   });
 
@@ -530,26 +626,29 @@ describe("MCP Server", () => {
         json: () => Promise.resolve(mockResponse),
       } as Response);
 
+      const outputPath = "/tmp/edited-image.png";
+      const absolutePath = resolve(outputPath);
+
       const { client } = await createTestClient();
       const result = await client.callTool({
         name: "edit_image",
         arguments: {
           prompt: "Add a hat",
           images: [{ data: VALID_BASE64_PNG, mimeType: "image/png" }],
-          outputPath: "/tmp/edited-image.png",
+          outputPath,
         },
       });
 
       expect(result.isError).toBeFalsy();
-      expect(vi.mocked(mkdir)).toHaveBeenCalledWith("/tmp", { recursive: true });
+      expect(vi.mocked(mkdir)).toHaveBeenCalledWith(dirname(absolutePath), { recursive: true });
       expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
-        "/tmp/edited-image.png",
+        absolutePath,
         expect.any(Buffer)
       );
       expect(result.content).toHaveLength(2);
       expect(result.content[1]).toEqual({
         type: "text",
-        text: "Image saved to: /tmp/edited-image.png",
+        text: `Image saved to: ${absolutePath}`,
       });
     });
   });
